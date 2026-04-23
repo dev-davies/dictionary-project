@@ -1,24 +1,27 @@
 # dico
 
-## Project setup
-```
+Dictionary app built with Nuxt 3.
+
+## Setup
+
+```bash
 npm install
 ```
 
-### Compiles and hot-reloads for development
-```
-npm run serve
+## Development
+
+```bash
+npm run dev
 ```
 
-### Compiles and minifies for production
-```
-npm run build
+## Production
+
+```bash
+npm run generate
 ```
 
-### Lints and fixes files
-```
-npm run lint
-```
+## Preview production build
 
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+```bash
+npm run preview
+```
