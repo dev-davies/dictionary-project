@@ -2,123 +2,20 @@
 const config = useRuntimeConfig()
 const baseURL = config.app.baseURL ?? '/'
 
-const word = ref('')
-const word2 = ref('')
-const phonetic = ref('')
-const errortitle = ref('')
-const errormessage = ref('')
-const suggestionsArray = ref([])
-const definitionsArray = ref([])
-const synonymsArray = ref([])
-const loading = ref(false)
-const initialLoading = ref(true)
-
-function speak(text) {
-  if (!text || !window.speechSynthesis) return
-  window.speechSynthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(text)
-  window.speechSynthesis.speak(utterance)
-}
-
-onMounted(async () => {
-  try {
-    let found = false;
-    let attempts = 0;
-    
-    // The herokuapp can return obscure words the dictionary API doesn't know. 
-    // We try up to 3 times to find a valid word.
-    while (!found && attempts < 3) {
-      attempts++;
-      try {
-        const data = await $fetch('https://random-word-api.herokuapp.com/word');
-        const randomWord = data[0];
-
-        definitionsArray.value = [];
-        synonymsArray.value = [];
-        const dictResponse = await $fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${randomWord}`);
-        
-        dictResponse[0].meanings.forEach(({ definitions, synonyms }) => {
-          definitions.forEach(({ definition }) => {
-            if (typeof definition === 'string') {
-              definitionsArray.value.push(definition);
-            }
-          });
-          if (synonyms && synonyms.length) {
-            synonyms.forEach(syn => {
-              if (!synonymsArray.value.includes(syn)) synonymsArray.value.push(syn);
-            });
-          }
-        });
-        
-        word2.value = dictResponse[0].word;
-        phonetic.value = dictResponse[0].phonetic ?? '';
-        found = true;
-      } catch (err) {
-        // Word not found in dictionary or fetch failed, loop will retry
-      }
-    }
-    
-    if (!found) {
-      // Fallback if 3 random obscure words failed in a row
-      word2.value = "Welcome";
-      phonetic.value = "";
-      definitionsArray.value = ["Please search for a word above."];
-      synonymsArray.value = [];
-    }
-  } catch (error) {
-    console.error('Failed to fetch initial word:', error);
-  } finally {
-    initialLoading.value = false;
-  }
-})
-
-async function getDefinitions() {
-  definitionsArray.value = []
-  suggestionsArray.value = []
-  synonymsArray.value = []
-  errortitle.value = ''
-  errormessage.value = ''
-  loading.value = true
-
-  try {
-    const [dictResponse, sugResponse] = await Promise.all([
-      $fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.value}`),
-      $fetch(`https://api.datamuse.com/sug?s=${word.value}`)
-    ])
-
-    dictResponse[0].meanings.forEach(({ definitions, synonyms }) => {
-      definitions.forEach(({ definition }) => {
-        if (typeof definition === 'string') {
-          definitionsArray.value.push(definition)
-        }
-      })
-      if (synonyms && synonyms.length) {
-        synonyms.forEach(syn => {
-          if (!synonymsArray.value.includes(syn)) synonymsArray.value.push(syn)
-        })
-      }
-    })
-
-    sugResponse.forEach(({ word: sugWord }) => {
-      if (typeof sugWord === 'string') {
-        suggestionsArray.value.push(sugWord)
-      }
-    })
-
-    phonetic.value = dictResponse[0].phonetic ?? ''
-    word2.value = dictResponse[0].word
-  } catch (error) {
-    if (error?.data) {
-      errortitle.value = error.data.title ?? 'Error'
-      errormessage.value = error.data.message ?? 'Something went wrong'
-    } else {
-      errortitle.value = 'Error'
-      errormessage.value = error.message ?? 'Something went wrong'
-    }
-  } finally {
-    loading.value = false
-  }
-}
+const {
+  query,
+  currentWord,
+  phonetic,
+  errortitle,
+  errormessage,
+  suggestionsArray,
+  definitionsArray,
+  synonymsArray,
+  loading,
+  initialLoading,
+  speak,
+  searchWord
+} = useDictionary()
 
 useHead({
   title: 'Dictionary by Davies'
@@ -126,99 +23,111 @@ useHead({
 </script>
 
 <template>
-  <div class="text-center mb-4">
-    <img class="mb-4" :src="`${baseURL}logo.png`" alt="Dictionary logo" width="72" height="72">
-    <h1 class="h3 mb-3 font-weight-normal">My Dictionary</h1>
-    <p>
-      Definitions from Free Dictionary API &middot;
-      <a target="_blank" href="https://dictionaryapi.dev/">Learn more</a>
-    </p>
-  </div>
-
-  <form class="form-signin" @submit.prevent="getDefinitions()">
-    <div class="form-label-group">
-      <input
-        id="word-input"
-        v-model="word"
-        type="text"
-        class="st form-control"
-        placeholder="Enter a word"
-        required
-        autofocus
-      >
-      <label for="word-input">Enter a word</label>
-      <button
-        class="ts btn btn-lg btn-primary btn-block"
-        type="submit"
-        :disabled="loading"
-      >
-        <span v-if="loading" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-        {{ loading ? 'Searching…' : 'Search' }}
-      </button>
-    </div>
-    <p v-if="errortitle" class="text-danger">
-      <strong>{{ errortitle }}:</strong> {{ errormessage }}
-    </p>
-  </form>
-
-  <div class="text-justify mt-4">
-    <div v-if="initialLoading" class="text-center">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading…</span>
-      </div>
+  <div class="min-h-screen bg-slate-950 text-slate-300 flex flex-col items-center justify-start p-4 pt-16 lg:p-8 font-sans">
+    
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <img class="mx-auto mb-6 w-20 h-20 drop-shadow-lg" :src="`${baseURL}logo.png`" alt="Dictionary logo">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">My Dictionary</h1>
+      <p class="text-slate-400 text-sm">
+        Definitions from Free Dictionary API &middot;
+        <a target="_blank" href="https://dictionaryapi.dev/" class="text-emerald-500 hover:text-emerald-400 transition-colors">Learn more</a>
+      </p>
     </div>
 
-    <template v-else>
-      <div style="display: flex; align-items: center;">
-        <img
-          class="m-2"
-          :src="`${baseURL}sound.svg`"
-          alt="Pronounce word"
-          width="30"
-          height="30"
-          style="cursor: pointer;"
-          title="Click to hear pronunciation"
-          @click="speak(word2)"
+    <!-- Search Form -->
+    <form class="w-full max-w-md mb-8 relative" @submit.prevent="searchWord()">
+      <label for="word-input" class="sr-only">Enter a word</label>
+      <div class="flex shadow-lg rounded-md relative z-10">
+        <input
+          id="word-input"
+          v-model="query"
+          type="text"
+          class="font-mono w-full bg-slate-900/50 border border-slate-800 rounded-l-md px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all backdrop-blur-sm"
+          placeholder="Enter a word..."
+          required
+          autofocus
         >
-        <h2 class="word font-weight-normal mb-0">{{ word2 }}</h2>
-        <div class="m-3 text-muted">{{ phonetic }}</div>
+        <button
+          class="bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-600 hover:border-emerald-500 rounded-r-md px-6 py-3 font-semibold transition-colors flex items-center justify-center disabled:opacity-75 disabled:cursor-not-allowed"
+          type="submit"
+          :disabled="loading"
+        >
+          <span v-if="loading" class="mr-2 animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+          {{ loading ? 'Searching…' : 'Search' }}
+        </button>
+      </div>
+      <p v-if="errortitle" class="text-red-400 text-sm mt-3 font-mono absolute w-full text-center">
+        <strong class="font-bold">{{ errortitle }}:</strong> {{ errormessage }}
+      </p>
+    </form>
+
+    <!-- Main Content -->
+    <div class="w-full max-w-2xl flex-grow pb-16">
+      <div v-if="initialLoading" class="flex justify-center mt-12">
+        <div class="animate-spin h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full"></div>
       </div>
 
-      <h6 class="mt-4">Definitions</h6>
-      <ol type="1">
-        <li v-for="(definition, index) in definitionsArray" :key="index">
-          {{ definition }}
-        </li>
-      </ol>
+      <template v-else>
+        <!-- Word Header -->
+        <div class="flex items-center justify-center space-x-4 mb-8">
+          <button 
+            @click="speak(currentWord)"
+            class="text-slate-400 hover:text-emerald-400 transition-colors p-2 rounded-full hover:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Click to hear pronunciation"
+          >
+            <!-- Using filter invert to make the black icon white/grayish to fit dark mode -->
+            <img :src="`${baseURL}sound.svg`" alt="Pronounce word" class="w-8 h-8 opacity-80 hover:opacity-100 transition-opacity" style="filter: invert(1) brightness(0.8) sepia(1) hue-rotate(100deg) saturate(3);">
+          </button>
+          <h2 class="font-mono text-4xl font-semibold text-slate-100 tracking-tight">{{ currentWord }}</h2>
+          <div class="font-mono text-lg text-emerald-500">{{ phonetic }}</div>
+        </div>
 
-      <template v-if="synonymsArray.length">
-        <h6 class="mt-4">Synonyms:</h6>
-        <span
-          v-for="(synonym, index) in synonymsArray"
-          :key="'syn-'+index"
-          class="m-1 badge badge-info badge-outlined"
-          style="cursor: pointer;"
-          title="Click to search"
-          @click="word = synonym; getDefinitions()"
-        >
-          {{ synonym }}
-        </span>
-      </template>
+        <!-- Terminal Card -->
+        <div class="bg-slate-900/40 backdrop-blur-sm border border-slate-800 rounded-xl p-6 md:p-8 shadow-xl">
+          <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800/50 pb-2">Definitions</h6>
+          <ol class="list-decimal list-outside pl-4 space-y-3 text-slate-300 leading-relaxed marker:text-slate-500">
+            <li v-for="(definition, index) in definitionsArray" :key="index" class="pl-2">
+              {{ definition }}
+            </li>
+          </ol>
 
-      <template v-if="suggestionsArray.length">
-        <h6 class="mt-4">Suggestions:</h6>
-        <span
-          v-for="(suggestion, index) in suggestionsArray"
-          :key="index"
-          class="m-1 badge badge-default badge-outlined"
-        >
-          {{ suggestion }}
-        </span>
+          <!-- Synonyms -->
+          <template v-if="synonymsArray.length">
+            <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mt-8 mb-4 border-b border-slate-800/50 pb-2">Synonyms</h6>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="(synonym, index) in synonymsArray"
+                :key="'syn-'+index"
+                class="font-mono text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                title="Click to search"
+                @click="query = synonym; searchWord()"
+              >
+                {{ synonym }}
+              </button>
+            </div>
+          </template>
+
+          <!-- Suggestions -->
+          <template v-if="suggestionsArray.length">
+            <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mt-8 mb-4 border-b border-slate-800/50 pb-2">Suggestions</h6>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="(suggestion, index) in suggestionsArray"
+                :key="index"
+                class="font-mono text-xs px-2.5 py-1 bg-slate-800/50 text-slate-400 border border-slate-700/50 rounded"
+              >
+                {{ suggestion }}
+              </span>
+            </div>
+          </template>
+        </div>
       </template>
-    </template>
+    </div>
+
+    <!-- Footer -->
+    <div class="w-full text-center py-6 mt-auto text-xs text-slate-500 font-mono tracking-widest uppercase border-t border-slate-800/50">
+      Dictionary by Davies &copy; {{ new Date().getFullYear() }}
+    </div>
   </div>
-
-  <p class="mt-5 mb-3 text-muted text-center">
-    Dictionary by Davies &copy; {{ new Date().getFullYear() }}
-  </p>
 </template>

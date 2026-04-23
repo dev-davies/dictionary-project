@@ -12,13 +12,9 @@ export default defineNuxtConfig({
     }
   },
 
-  css: [
-    'bootstrap/dist/css/bootstrap.min.css',
-    '~/assets/css/floating-labels.css'
-  ],
-
+  css: [],
   ssr: false,
-
   compatibilityDate: '2024-11-01',
-  devtools: { enabled: true }
+  devtools: { enabled: true },
+  modules: ['@nuxtjs/tailwindcss']
 })
