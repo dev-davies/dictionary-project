@@ -63,7 +63,7 @@ useHead({
     </form>
 
     <!-- Main Content -->
-    <div class="w-full max-w-2xl flex-grow pb-16">
+    <div class="w-full max-w-5xl flex-grow pb-16">
       <div v-if="initialLoading" class="flex justify-center mt-12">
         <div class="animate-spin h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full"></div>
       </div>
@@ -83,44 +83,56 @@ useHead({
           <div class="font-mono text-lg text-emerald-500">{{ phonetic }}</div>
         </div>
 
-        <!-- Terminal Card -->
-        <div class="bg-slate-900/40 backdrop-blur-sm border border-slate-800 rounded-xl p-6 md:p-8 shadow-xl">
-          <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800/50 pb-2">Definitions</h6>
-          <ol class="list-decimal list-outside pl-4 space-y-3 text-slate-300 leading-relaxed marker:text-slate-500">
-            <li v-for="(definition, index) in definitionsArray" :key="index" class="pl-2">
-              {{ definition }}
-            </li>
-          </ol>
-
-          <!-- Synonyms -->
-          <template v-if="synonymsArray.length">
-            <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mt-8 mb-4 border-b border-slate-800/50 pb-2">Synonyms</h6>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="(synonym, index) in synonymsArray"
-                :key="'syn-'+index"
-                class="font-mono text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                title="Click to search"
-                @click="query = synonym; searchWord()"
-              >
-                {{ synonym }}
-              </button>
+        <!-- Split Layout Grid -->
+        <div :class="['grid gap-8 w-full', (suggestionsArray.length || synonymsArray.length) ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1 max-w-3xl mx-auto']">
+          
+          <!-- Left Column (Definitions) -->
+          <div :class="(suggestionsArray.length || synonymsArray.length) ? 'lg:col-span-2 space-y-6' : 'space-y-6'">
+            <div class="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-6 shadow-xl">
+              <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800/50 pb-2">Definitions</h6>
+              <ol class="list-decimal list-outside pl-4 space-y-4 text-slate-300 leading-relaxed marker:text-slate-500 font-sans">
+                <li v-for="(definition, index) in definitionsArray" :key="index" class="pl-2">
+                  {{ definition }}
+                </li>
+              </ol>
             </div>
-          </template>
+          </div>
 
-          <!-- Suggestions -->
-          <template v-if="suggestionsArray.length">
-            <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mt-8 mb-4 border-b border-slate-800/50 pb-2">Suggestions</h6>
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="(suggestion, index) in suggestionsArray"
-                :key="index"
-                class="font-mono text-xs px-2.5 py-1 bg-slate-800/50 text-slate-400 border border-slate-700/50 rounded"
-              >
-                {{ suggestion }}
-              </span>
+          <!-- Right Column (Sidebar) -->
+          <div v-if="suggestionsArray.length || synonymsArray.length" class="lg:col-span-1 flex flex-col gap-6">
+            
+            <!-- Synonyms -->
+            <div v-if="synonymsArray.length" class="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-6 shadow-xl h-fit">
+              <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800/50 pb-2">Synonyms</h6>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="(synonym, index) in synonymsArray"
+                  :key="'syn-'+index"
+                  class="font-mono text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  title="Click to search"
+                  @click="query = synonym; searchWord()"
+                >
+                  {{ synonym }}
+                </button>
+              </div>
             </div>
-          </template>
+
+            <!-- Suggestions -->
+            <div v-if="suggestionsArray.length" class="bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-6 shadow-xl h-fit">
+              <h6 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-800/50 pb-2">Suggestions</h6>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="(suggestion, index) in suggestionsArray"
+                  :key="index"
+                  class="font-mono text-sm px-3 py-1 bg-slate-800 text-emerald-400 border border-slate-700/50 rounded-md hover:bg-slate-700 transition-colors cursor-default"
+                >
+                  {{ suggestion }}
+                </span>
+              </div>
+            </div>
+
+          </div>
+
         </div>
       </template>
     </div>
