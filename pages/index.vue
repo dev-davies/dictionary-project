@@ -9,6 +9,7 @@ const errortitle = ref('')
 const errormessage = ref('')
 const suggestionsArray = ref([])
 const definitionsArray = ref([])
+const synonymsArray = ref([])
 const loading = ref(false)
 const initialLoading = ref(true)
 
@@ -21,20 +22,60 @@ function speak(text) {
 
 onMounted(async () => {
   try {
-    const data = await $fetch('https://random-words-api.vercel.app/word')
-    word2.value = data[0].word
-    phonetic.value = data[0].pronunciation
-    definitionsArray.value = [data[0].definition]
+    let found = false;
+    let attempts = 0;
+    
+    // The herokuapp can return obscure words the dictionary API doesn't know. 
+    // We try up to 3 times to find a valid word.
+    while (!found && attempts < 3) {
+      attempts++;
+      try {
+        const data = await $fetch('https://random-word-api.herokuapp.com/word');
+        const randomWord = data[0];
+
+        definitionsArray.value = [];
+        synonymsArray.value = [];
+        const dictResponse = await $fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${randomWord}`);
+        
+        dictResponse[0].meanings.forEach(({ definitions, synonyms }) => {
+          definitions.forEach(({ definition }) => {
+            if (typeof definition === 'string') {
+              definitionsArray.value.push(definition);
+            }
+          });
+          if (synonyms && synonyms.length) {
+            synonyms.forEach(syn => {
+              if (!synonymsArray.value.includes(syn)) synonymsArray.value.push(syn);
+            });
+          }
+        });
+        
+        word2.value = dictResponse[0].word;
+        phonetic.value = dictResponse[0].phonetic ?? '';
+        found = true;
+      } catch (err) {
+        // Word not found in dictionary or fetch failed, loop will retry
+      }
+    }
+    
+    if (!found) {
+      // Fallback if 3 random obscure words failed in a row
+      word2.value = "Welcome";
+      phonetic.value = "";
+      definitionsArray.value = ["Please search for a word above."];
+      synonymsArray.value = [];
+    }
   } catch (error) {
-    console.error('Failed to fetch random word:', error)
+    console.error('Failed to fetch initial word:', error);
   } finally {
-    initialLoading.value = false
+    initialLoading.value = false;
   }
 })
 
 async function getDefinitions() {
   definitionsArray.value = []
   suggestionsArray.value = []
+  synonymsArray.value = []
   errortitle.value = ''
   errormessage.value = ''
   loading.value = true
@@ -45,12 +86,17 @@ async function getDefinitions() {
       $fetch(`https://api.datamuse.com/sug?s=${word.value}`)
     ])
 
-    dictResponse[0].meanings.forEach(({ definitions }) => {
+    dictResponse[0].meanings.forEach(({ definitions, synonyms }) => {
       definitions.forEach(({ definition }) => {
         if (typeof definition === 'string') {
           definitionsArray.value.push(definition)
         }
       })
+      if (synonyms && synonyms.length) {
+        synonyms.forEach(syn => {
+          if (!synonymsArray.value.includes(syn)) synonymsArray.value.push(syn)
+        })
+      }
     })
 
     sugResponse.forEach(({ word: sugWord }) => {
@@ -145,8 +191,22 @@ useHead({
         </li>
       </ol>
 
+      <template v-if="synonymsArray.length">
+        <h6 class="mt-4">Synonyms:</h6>
+        <span
+          v-for="(synonym, index) in synonymsArray"
+          :key="'syn-'+index"
+          class="m-1 badge badge-info badge-outlined"
+          style="cursor: pointer;"
+          title="Click to search"
+          @click="word = synonym; getDefinitions()"
+        >
+          {{ synonym }}
+        </span>
+      </template>
+
       <template v-if="suggestionsArray.length">
-        <h6>Suggestions:</h6>
+        <h6 class="mt-4">Suggestions:</h6>
         <span
           v-for="(suggestion, index) in suggestionsArray"
           :key="index"
